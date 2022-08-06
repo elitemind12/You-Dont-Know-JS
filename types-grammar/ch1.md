@@ -222,9 +222,11 @@ The `string` type contains any value which is a collection of one or more charac
 myName = "Kyle";
 ```
 
+JS does not distinguish a single character as a different type as some languages do; `"a"` is a string just like `"abc"` is.
+
 Strings can be delimited by double-quotes (`"`), single-quotes (`'`), or back-ticks (`` ` ``). The ending delimiter must always match the starting delimiter.
 
-Strings have an intrinsic length which corresponds to how many code-points -- actually, code-units, more on that in a moment -- they contain.
+Strings have an intrinsic length which corresponds to how many code-points -- actually, code-units, more on that in a bit -- they contain.
 
 ```js
 myName = "Kyle";
@@ -234,21 +236,33 @@ myName.length;      // 4
 
 This does not necessarily correspond to the number of visible characters present between the start and end delimiters (aka, the string literal). It can sometimes be a little confusing to keep straight the difference between a string literal and the underlying string value, so pay close attention.
 
+| NOTE: |
+| :--- |
+| We'll cover length computation of strings in detail, in Chapter 2. |
+
 ### JS Character Encodings
 
 What type of character encoding does JS use for string characters?
 
-One might assume UTF-8 (8-bit) or UTF-16 (16-bit). It's actually more complicated, because you also need to consider UCS-2 (2-byte Universal Character Set), which is similar to UTF-16, but not quite the same. [^UTFUCS]
+You've probably heard of "Unicode" and perhaps even "UTF-8" (8-bit) or "UTF-16" (16-bit). If you're like me (before doing the research it took to write this text), you might have just hand-waved and decided that's all you need to know about character encodings in JS strings.
 
-The first group of 65,535 code points in Unicode is called the BMP (Basic Multilingual Plane). All the rest of the code points are grouped into 16 so called "supplemental planes" or "astral planes". When representing Unicode characters from the BMP, it's pretty straightforward, as they can *fit* neatly into single JS characters.
+But... it's not. Not even close.
 
-But when representing extended characters outside the BMP, JS actually represents these characters code-points as a pairing of two separate code units, called *surrogate halves*.
+It turns out, you need to understand how a variety of aspects of Unicode work, and even to consider concepts from UCS-2 (2-byte Universal Character Set), which is similar to UTF-16, but not quite the same. [^UTFUCS]
 
-For example, the Unicode code point `127878` (hexadecimal `1F386`) is `🎆` (fireworks symbol). JS stores this in the string value as two surrogate-halve code units: `U+D83C` and `U+DF86`.
+Unicode defines all the "characters" we can represent universally in computer programs, by assigning a specific number to each, called code-points. These numbers range from `0` all the way up to a maximum of `1114111` (`10FFFF` in hexadecimal).
+
+The standard notation for Unicode characters is `U+` followed by 4-6 hexadecimal characters. For example, the `❤` (heart symbol) is code-point `10084` (`2764` in hexadecimal), and is thus notated with `U+2764`.
+
+The first group of 65,535 code points in Unicode is called the BMP (Basic Multilingual Plane). These can all be represented with 16 bits (2 bytes). When representing Unicode characters from the BMP, it's fairly straightforward, as they can *fit* neatly into single UTF-16 JS characters.
+
+All the rest of the code points are grouped into 16 so called "supplemental planes" or "astral planes". These code-points require more than 16 bits to represent -- 21 bits to be exact -- so when representing extended/supplemental characters above the BMP, JS actually stores these code-points as a pairing of two adjacent 16-bit code units, called *surrogate halves*.
+
+For example, the Unicode code point `127878` (hexadecimal `1F386`) is `🎆` (fireworks symbol). JS stores this in a string value as two surrogate-halve code units: `U+D83C` and `U+DF86`.
 
 This has implications on the length of strings, because a single visible character like the `🎆` fireworks symbol, when in a JS string, is a counted as 2 characters for the purposes of the string length!
 
-We'll revisit Unicode characters shortly.
+We'll revisit Unicode characters in a bit, and then cover the challenges of computing string length in Chapter 2.
 
 ### Escape Sequences
 
@@ -285,6 +299,26 @@ console.log(windowsFontsPath);
 | :--- |
 | What about four backslashes `\\\\` in a string literal? Well, that's just two `\\` escape sequences next to each other, so it results in two adjacent backslashes (`\\`) in the underlying string value. You might recognize there's an odd/even rule pattern at play. You should thus be able to deciper any odd (`\\\\\`, `\\\\\\\\\`, etc) or even (`\\\\\\`, `\\\\\\\\\\`, etc) number of backslashes in a string literal. |
 
+#### Line Continuation
+
+The `\` character followed by an actual new-line character (not just literal `n`) is a special case, and it creates what's called a line-continuation:
+
+```js
+greeting = "Hello \
+Friends!";
+
+console.log(greeting);
+// Hello Friends!
+```
+
+As you can see, the new-line at the end of the `greeting = ` line is immediately preceded by a `\`, which allows this string literal to continue onto the subsequent line. Without the escaping `\` before it, a new-line -- the actual new-line, not the `\n` character escape sequence -- appearing in a `"` or `'` delimited string literal would actually produce a JS syntax parsing error.
+
+Because the end-of-line `\` turns the new-line character into a line continuation, the new-line character is omitted from the string, as shown by the `console.log(..)` output.
+
+| NOTE: |
+| :--- |
+| This line-continuation feature is often referred to as "multi-line strings", but I think that's a confusing label. As you can see, the string value itself doesn't have multiple lines, it only was defined across multiple lines via the line continuations. A multi-line string would actually have multiple lines in the underlying value. We'll revisit this topic later in this chapter when we cover Template Literals. |
+
 ### Multi-Character Escapes
 
 Multi-character escape sequences may be hexadecimal or Unicode sequences.
@@ -303,13 +337,15 @@ For any normal character that can be typed on a keyboard, such as `"a"`, it's us
 "a" === "\x61";             // true
 ```
 
-#### Unicode
+#### Unicode In Strings
 
-Unicode escape sequences encode any of the characters in the Unicode set whose code-point values range from 0-65535. They look like `\u` followed by exactly four hexadecimal characters. For example, the escape-sequence `\u00A9` (or `\u00a9`) corresponds to that same `©` symbol, while `\u263A` (or `\u263a`) corresponds to the Unicode character with code-point `9786`: `☺` (smiley face symbol).
+Unicode escape sequences alone can encode any of the characters from the Unicode BMP. They look like `\u` followed by exactly four hexadecimal characters.
+
+For example, the escape-sequence `\u00A9` (or `\u00a9`) corresponds to that same `©` symbol, while `\u263A` (or `\u263a`) corresponds to the Unicode character with code-point `9786`: `☺` (smiley face symbol).
 
 When any character-escape sequence (regardless of length) is recognized, the single character it represents is inserted into the string, rather than the original separate characters. So, in the string `"\u263A"`, there's only one (smiley) character, not six individual characters.
 
-Unicode code-points can go well above `65535` (`FFFF` in hexadecimal), up to a maximum of `1114111` (`10FFFF` in hexadecimal). For example, `1F4A9` (or `1f4a9`)is decimal code-point `128169`, which corresponds to the funny `💩` (pile of poo) symbol.
+But as explained earlier, many Unicode code-points are well above `65535`. For example, `1F4A9` (or `1f4a9`) is decimal code-point `128169`, which corresponds to the funny `💩` (pile-of-poo) symbol.
 
 But `\u1F4A9` wouldn't work to include this character in a string, since it would be parsed as the Unicode escape sequence `\u1F4A`, followed by a literal `9` character. To address this limitation, a variation of Unicode escape sequences was introduced to allow an arbitrary number of hexadecimal characters after the `\u`, by surrounding them with `{ .. }` curly braces:
 
@@ -320,7 +356,7 @@ console.log(myReaction);
 // 💩
 ```
 
-Recall the earlier discussion of extended (non-BMP) Unicode characters and *surrogate halves*? The same `💩` could also be defined with the two explicit code-units:
+Recall the earlier discussion of extended (non-BMP) Unicode characters and *surrogate halves*? The same `💩` could also be defined with two explicit code-units, that form a surrogate pair:
 
 ```js
 myReaction = "\uD83D\uDCA9";
@@ -338,25 +374,79 @@ All three representations of this same character are stored internally by JS ide
 
 Even though JS doesn't care which way such a character is represented in your program, consider the readability differences carefully when authoring your code.
 
-### Line Continuation
-
-The `\` followed by an actual new-line character (not just literal `n`) is a special case, and it creates what's called a line-continuation:
-
-```js
-greeting = "Hello \
-Friends!";
-
-console.log(greeting);
-// Hello Friends!
-```
-
-As you can see, the new-line at the end of the `greeting = ` line is immediately preceded by a `\`, which allows this string literal to continue onto the subsequent line. Without the escaping `\` before it, a new-line -- the actual new-line, not the `\n` character escape sequence -- appearing in a `"` or `'` delimited string literal would actually produce a JS syntax parsing error.
-
-Because the end-of-line `\` turns the new-line character into a line continuation, the new-line character is omitted from the string, as shown by the `console.log(..)` output.
-
 | NOTE: |
 | :--- |
-| This line-continuation feature is often referred to as "multi-line strings", but I think that's a confusing label. As you can see, the string value itself doesn't have multiple lines, it only was defined across multiple lines via the line continuations. A multi-line string would actually have multiple lines in the underlying value. |
+| Even though `💩` looks like a single character, its internal representation affects things like the length computation of a string with that character in it. We'll cover length computation of strings in Chapter 2. |
+
+##### Unicode Normalization
+
+Another wrinkle in Unicode string handling is that even certain single BMP characters can be represented in different ways.
+
+For example, the `"é"` character can either be represented as itself (code-point `233`, aka `\xe9` or `\u00e9` or `\u{e9}`), or as the combination of two code-points: the `"e"` character (code-point `101`, aka `\x65`, `\u0065`, `\u{65}`) and the *combining tilde* (code-point `769`, aka `\u0301`, `\u{301}`).
+
+Consider:
+
+```js
+eTilde1 = "é";
+eTilde2 = "\u00e9";
+eTilde3 = "\u0065\u0301";
+
+console.log(eTilde1);       // é
+console.log(eTilde2);       // é
+console.log(eTilde3);       // é
+```
+
+However, the way the `"é"` character is internally stored affects things like `length` computation of the containing string, as well as equality comparison:
+
+```js
+eTilde1.length;             // 2
+eTilde2.length;             // 1
+eTilde3.length;             // 2
+
+eTilde1 === eTilde2;        // false
+eTilde1 === eTilde3;        // true
+```
+
+One particular challenge is that you may copy-paste a string with an `"é"` character visible in it, and that character may have been in the *composed* or *decomposed* form. But there's no visual way to tell, and yet the underlying string value will be different depending:
+
+```js
+"é" === "é";           // false!!
+```
+
+This internal representation difference can be quite challenging if not carefully planned for. Fortunately, JS provides a `normalize(..)` utility method on strings to help:
+
+```js
+eTilde1 = "é";
+eTilde2 = "\u{e9}";
+eTilde3 = "\u{65}\u{301}";
+
+eTilde1.normalize("NFC") === eTilde2;
+eTilde2.normalize("NFD") === eTilde3;
+```
+
+The `"NFC"` normalization mode combines adjacent code-points into the *composed* code-point (if possible), whereas the `"NFD"` normalization mode splits a single code-point into its *decomposed* code-points (if possible).
+
+And there can actually be more than two individual *decomposed* code-points that make up a single *composed* code-point -- for example, a single character could have several diacritical marks applied to it.
+
+When dealing with Unicode strings that will be compared, sorted, or length analyzed, it's very important to keep Unicode normalization in mind, and use it where necessary.
+
+##### Unicode Grapheme Clusters
+
+A final complication of Unicode string handling is the support for clustering of multiple adjacent code-points into a single visually distinct symbol, referred to as a *grapheme* (or a *grapheme cluster*).
+
+An example would be a family emoji such as `"👩‍👩‍👦‍👦"`, which is actually made up of 7 code-points that all cluster/group together into a single visual symbol.
+
+Consider:
+
+```js
+familyEmoji = "\u{1f469}\u{200d}\u{1f469}\u{200d}\u{1f466}\u{200d}\u{1f466}";
+
+familyEmoji;            // 👩‍👩‍👦‍👦
+```
+
+This emoji is *not* a single registered Unicode code-point, and as such, there's no *normalization* that can be performed to compose these 7 separate code-points into a single entity. The visual rendering logic for such composite symbols is quite complex, well beyond what most of JS developers want to embed into our programs. Libraries do exist for handling some of this logic, but they're often large and still don't necessarily cover all of the nuances/variations.
+
+This kind of complexity significantly affects length computations, comparison, sorting, and many other common string-oriented operations.
 
 ### Template Literals
 
@@ -472,6 +562,10 @@ If `radix` is omitted, the behavior of `parseInt(..)` is rather nuanced and conf
 
 `parseFloat(..)` always parses with a radix of `10`, so no second argument is accepted.
 
+| WARNING: |
+| :--- |
+| One surprising difference between `parseInt(..)` and `parseFloat(..)` is that `parseInt(..)` will not fully parse scientific notation (e.g., `"1.23e+5"`), instead stopping at the `.` as it's not valid for integers; in fact, even `"1e+5"` stops at the `"e"`. `parseFloat(..)` on the other hand fully parses scientific notation as expected. |
+
 In contrast to parsing-conversion, coercive-conversion is an all-or-nothing sort of operation. Either the entire contents of the string are recognized as numeric (integer or floating-point), or the whole conversion fails (resulting in `NaN` -- again, see "Invalid Number" later in this chapter).
 
 Coercive-conversion can be done explicitly with the `Number(..)` function (no `new` keyword) or with the unary `+` operator in front of the value:
@@ -556,7 +650,7 @@ someBigPowerOf10 = 1000000000;
 someBigPowerOf10 = 1e9;
 ```
 
-By default, JS will represent (e.g., as string values, etc) either very large or very small numbers -- specifically, if the values require more than 21 digits of precision --  using this same scientific notation:
+By default, JS will represent (e.g., as string values, etc) either very large or very small numbers -- specifically, if the values require more than 21 digits of precision -- using this same scientific notation:
 
 ```js
 ratherBigNumber = 123 ** 11;
@@ -566,7 +660,19 @@ prettySmallNumber = 123 ** -11;
 prettySmallNumber.toString();   // "1.0257553107587752e-23"
 ```
 
-Another readability affordance for numeric literals is the ability to insert `_` as a digit separator wherever its convenient/meaningful to do so. For example:
+Numbers with smaller absolute values (closer to `0`) than these thresholds can still be forced into scientific notation form (as strings):
+
+```js
+plainBoringNumber = 42;
+
+plainBoringNumber.toExponential();      // "4.2e+1"
+plainBoringNumber.toExponential(0);     // "4e+1"
+plainBoringNumber.toExponential(4);     // "4.2000e+1"
+```
+
+The optional argument to `toExponential(..)` specifies the number of decimal digits to include in the string representation.
+
+Another readability affordance for specifying numeric literals in code is the ability to insert `_` as a digit separator wherever its convenient/meaningful to do so. For example:
 
 ```js
 someBigPowerOf10 = 1_000_000_000;
@@ -580,7 +686,9 @@ The decision to use `12345` (no separator), `12_345` (like "12,345"), or `123_45
 
 IEEE-754[^IEEE754] is a technical standard for binary representation of decimal numbers. It's widely used by most computer programming languages, including JS, Python, Ruby, etc.
 
-In 64-bit IEEE-754 -- so called "double-precision" because originally IEEE-754 used to be 32-bit, and now it's double that! -- the 64 bits are divided into three sections: 52 bits for the number's base value (aka, "fraction", "mantissa", or "significand"), 11 bits for the exponent to raise `2` to before multiplying, and 1 bit for the sign of the ultimate value.
+I'm not going to cover it exhaustively, but I think a brief primer on how numbers work in languages like JS is more than warranted, given how few programmers have *any* familiarity with it.
+
+In 64-bit IEEE-754 -- so called "double-precision", because originally IEEE-754 used to be 32-bit, and now it's double that! -- the 64 bits are divided into three sections: 52 bits for the number's base value (aka, "fraction", "mantissa", or "significand"), 11 bits for the exponent to raise `2` to before multiplying, and 1 bit for the sign of the ultimate value.
 
 These bits are arranged left-to-right, as so (S = Sign Bit, E = Exponent Bit, M = Mantissa Bit):
 
@@ -603,7 +711,7 @@ The 11-bit exponent is binary `10000000100`, which in base-10 is `1028`. But in 
 
 | NOTE: |
 | :--- |
-| If the subtracting `1023` from the exponent value gives a negative (e.g., `-3`), that's still interpreted as `2`'s exponent. Raising `2` to negative numbers just produces smaller and smaller values. |
+| If the subtracting `1023` from the exponent value gives a negative (e.g., `-3`), that's still interpreted as `2`'s exponent; raising `2` to negative numbers just produces smaller and smaller values. |
 
 The remaining 52 bits give us the base value `01010000...`, interpreted as binary decimal `1.0101000...` (with all trailing zeros). Converting *that* to base-10, we get `1.3125000...`. Finally, then multiply that by `32` already computed from the exponent. The result: `42`.
 
@@ -619,49 +727,7 @@ The number `42.0000001`, which is only different from `42.000000` by just `0.000
 
 Notice how the previous bit pattern and this one differ by quite a few bits in the trailing positions! The binary decimal fraction containing all those extra `1` bits (`1.010100000000...01011111110010101`) converts to base-10 as `1.31250000312500003652`, which multipled by `32` gives us exactly `42.0000001`.
 
-Now you understand a *bit more* about how IEEE-754 works!
-
-#### Floating Point Imprecision
-
-One of the classic gotchas of any IEEE-754 number system in any programming language -- NOT UNIQUELY JS! -- is that not all operations and values can fit neatly into the IEEE-754 representations.
-
-The most common illustration is:
-
-```js
-point3a = 0.1 + 0.2;
-point3b = 0.3;
-
-point3a;                        // 0.30000000000000004
-point3b;                        // 0.3
-
-point3a === point3b;            // false <-- oops!
-```
-
-The operation `0.1 + 0.2` ends up creating floating-point error (drift), where the value stored is actually `0.30000000000000004`.
-
-The respective bit representations are:
-
-```
-// 0.30000000000000004
-00111111110100110011001100110011
-00110011001100110011001100110100
-
-// 0.3
-00111111110100110011001100110011
-00110011001100110011001100110011
-```
-
-If you look closely at those bit patterns, only the last 2 bits differ, from `00` to `11`. But that's enough for those two numbers to be unequal!
-
-Again, just to reinforce: this behavior is **NOT IN ANY WAY** unique to JS. This is exactly how any IEEE-754 conforming programming language will work in the same scenario. As I asserted above, the majority of all programming languages use IEEE-754, and thus they will all suffer this same fate.
-
-The temptation to make fun of JS for `0.1 + 0.2 !== 0.3` is strong. But it's completely bogus.
-
-Pretty much all programmers need to be aware of IEEE-754 and make sure they are careful about these kinds of gotchas. It's somewhat amazing, in a disappointing way, how few of them have any idea how IEEE-754 works. If you've taken your time reading and understanding the last several sections of this chapter, you're now in that rare tiny percentage who actually put in the effort to understand the numbers in their programs!
-
-| TIP: |
-| :--- |
-| Shortly, we'll cover `Number.EPSILON`, which offers an approach to working around this floating point error situation when comparing numbers. |
+We'll revisit more details about floating-point (im)precision in Chapter 2. But now you understand a *bit more* about how IEEE-754 works!
 
 ### Number Limits
 
@@ -726,36 +792,6 @@ Number.MIN_VALUE;               // 5e-324 <-- usually!
 
 Most JS engines seem to have a minimum representable value around `5E-324` (about `2^-1074`). Depending on the engine and/or platform, a different value may be exposed. Be careful about any program logic that relies on such implementation-dependent values.
 
-### Safely Small
-
-There's another *very small* `number` value you may want to use:
-
-```js
-Number.EPSILON;                 // 2.220446049250313e-16
-```
-
-*Epsilon* is defined as the smallest difference JS can represent between `1` and the next value greater than `1`. While this value is implementation/platform dependent, it's typically about `2.2E16`, or `2^-52`. This value is the maximum amount of floating-point representation error (as discussed earlier), so it represents the threshold above which two values are *actually* different rather just skewed by error.
-
-Thus, `Number.EPSILON` can used as a *very small* tolerance value to ensure number comparisons are *safe*:
-
-```js
-function safeNumberEquals(a,b) {
-    return Math.abs(a - b) < Number.EPSILON;
-}
-
-point3a = 0.1 + 0.2;
-point3b = 0.3;
-
-// are these safely "equal"?
-safeNumberEquals(point3a,point3b);      // true
-```
-
-Since JS cannot represent a difference between two values smaller than this `Number.EPSILON`, it should be safe to treat any two number values as "equal" (indistinguishable in JS, anyway) if their difference is less than `Number.EPSILON`.
-
-| WARNING: |
-| :--- |
-| If your program needs to deal with smaller values, or more specifically, smaller differences between values, than `2^-52`, you should absolutely *not use* the `number` value-type. There are decimal-emulation libraries that can offer arbitrary (small or large) precision. Or pick a different language than JS. |
-
 ### Safe Integer Limits
 
 Since `Number.MAX_VALUE` is an integer, you might assume that it's the largest integer in the language. But that's not really accurate.
@@ -780,6 +816,13 @@ Depending on how you interpret "smallest", you could either answer `0` or... `Nu
 
 ```js
 Number.MIN_SAFE_INTEGER;    // -9007199254740991
+```
+
+And JS provides a utiltity to determine if a value is an integer in this safe range (`-2^53 + 1` - `2^53 - 1`):
+
+```js
+Number.isSafeInteger(2 ** 53);      // false
+Number.isSafeInteger(2 ** 53 - 1);  // true
 ```
 
 ### Double Zeros

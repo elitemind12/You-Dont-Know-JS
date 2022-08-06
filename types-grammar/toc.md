@@ -17,7 +17,9 @@
     * BigInteger Values
     * Symbol Values
     * Primitives Are Built-In Types
-* Chapter 2: Value Behavior
-    * Value Immutability
-    * Assignments Are Value Copies
+* Chapter 2: Value Behaviors
+    * Primitive Immutability
+    * Primitive Assignments
+    * String Behaviors
+    * Number Behaviors
     * TODO
